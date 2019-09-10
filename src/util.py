@@ -1,27 +1,42 @@
-from typings import List
-
-class Vertex:
-    def __init__(self, x: float, y: float):
-        pass
+import numpy as np
 
 class Polygon:
-    def __init__(self: Polygon, vertices: List[Vertex]):
+    def __init__(self, vertices):
+        self.vertices = vertices
+
+    def detect_overlap(self, other):
         pass
 
-    def translate(self, x, y) -> Polygon:
+    def is_nested(self, other):
         pass
 
-    def detect_overlap(self: Polygon, other: Polygon) -> List[tuple]:
+    def resolve_overlap(self, intersections):
         pass
 
-    def is_nested(self: Polygon, other: Polygon) -> bool:
+    def resolve_nesting(self, other):
         pass
 
-    def resolve_overlap(self: Polygon, intersections: List[tuple]) -> Polygon:
-        pass
+def find_centroid(vertices):
+    return vertices.mean(axis=0)
 
-    def resolve_nesting(self: Polygon, other: Polygon) -> Polygon:
-        pass
+def find_bbox(vertices):
+    return np.amin(vertices, axis=0), np.amax(vertices, axis=0)
 
-def rotations(vertices: List[Vertex], rotations: int) -> List[Polygons]:
-    pass
+def get_rotations(vertices, rotations):
+    centroid = find_centroid(vertices)
+    relative = vertices - centroid
+    radii = np.linalg.norm(relative, axis=1)
+    angles = np.arctan2(relative[..., 1], relative[..., 0])
+
+    d_theta = 2 * np.pi / rotations
+    rotations = []
+    for increment in np.arange(0, 2 * np.pi, d_theta):
+        angles += increment
+        rotated_x = radii * np.cos(angles)
+        rotated_y = radii * np.sin(angles)
+        rotated_vertices = np.concatenate(rotated_x, rotated_y, axis=1)
+        mins, _ = find_bbox(rotated_vertices)
+        rotated_vertices -= mins
+        rotations.append(Polygon(rotated_vertices))
+
+    return rotations
