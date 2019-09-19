@@ -20,6 +20,12 @@ def ray_line_intersection_point(p0, r, q0, q1):
         if 0 <= t and 0 <= u <= 1:
             return np.array([p0 + r * t, q0 + s * u])
 
+def find_centroid(vertices):
+    return vertices.mean(axis=0)
+
+def find_bbox(vertices):
+    return np.amin(vertices, axis=0), np.amax(vertices, axis=0)
+
 class Shape:
     def __init__(self, vertices):
         self.vertices = vertices
@@ -78,13 +84,27 @@ class Polygon:
         return total % 2 == 1
 
     def resolve_overlap(self, other, intersections):
-        pass
+        max_trans = 0
+        for i, j in intersections:
+            p0 = self.vertices[i],
+            p1 = self.vertices[i + 1 % len(self.vertices)]
+            q0 = other.vertices[j],
+            q1 = other.vertices[j + 1 % len(other.vertices)]
+            
+            if np.sign(p0[0] - q0[0]) != np.sign(p0[0] - q1[0]):
+                y_coord = (p0[0] - q0[0]) * (q1[1] - q0[1]) / (q1[0] - q0[0])
+                max_trans = max(max_trans, y_coord - p0[1])
+            if np.sign(p1[0] - q0[0]) != np.sign(p1[0] - q1[0]):
+                y_coord = (p1[0] - q0[0]) * (q1[1] - q0[1]) / (q1[0] - q0[0])
+                max_trans = max(max_trans, y_coord - p1[1])
+            if np.sign(q0[0] - p0[0]) != np.sign(q0[0] - p1[0]):
+                y_coord = (q0[0] - p0[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
+                max_trans = max(max_trans, y_coord - q0[1])
+            if np.sign(q1[0] - p0[0]) != np.sign(q1[0] - p1[0]):
+                y_coord = (q1[0] - p0[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
+                max_trans = max(max_trans, y_coord - q1[1])
+
+        return max_trans
 
     def resolve_nesting(self, other):
         pass
-
-def find_centroid(vertices):
-    return vertices.mean(axis=0)
-
-def find_bbox(vertices):
-    return np.amin(vertices, axis=0), np.amax(vertices, axis=0)
