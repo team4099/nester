@@ -41,7 +41,7 @@ class Shape:
         rotated_vertices = np.concatenate(rotated_x, rotated_y, axis=1)
         mins, _ = find_bbox(rotated_vertices)
         rotated_vertices -= mins
-        return Polygon(self, self.centroid, rotated_vertices)
+        return Polygon(self, self.centroid - mins, rotated_vertices)
 
 class Polygon:
     def __init__(self, shape, centroid, vertices):
@@ -88,7 +88,7 @@ class Polygon:
         if total % 2 == 0:
             return 0
         else:
-            return intersections
+            return translation
 
     def resolve_overlap(self, other, intersections):
         max_trans = 0
