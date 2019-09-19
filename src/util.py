@@ -20,9 +20,19 @@ def ray_line_intersection_point(p0, r, q0, q1):
         if 0 <= t and 0 <= u <= 1:
             return np.array([p0 + r * t, q0 + s * u])
 
-class Polygon:
+class Shape:
     def __init__(self, vertices):
         self.vertices = vertices
+
+class Polygon:
+    def __init__(self, shape, centroid, vertices):
+        self.shape = shape
+        self.centroid = centroid
+        self.vertices = vertices
+
+    def translate(self, new_centroid):
+        self.vertices += new_centroid - self.centroid
+        self.centroid = new_centroid
 
     def detect_intersections(self, other):
         intersections = []
@@ -54,7 +64,7 @@ class Polygon:
 
         return total % 2 == 1
 
-    def resolve_overlap(self, intersections):
+    def resolve_overlap(self, other, intersections):
         pass
 
     def resolve_nesting(self, other):
@@ -66,9 +76,9 @@ def find_centroid(vertices):
 def find_bbox(vertices):
     return np.amin(vertices, axis=0), np.amax(vertices, axis=0)
 
-def get_rotations(vertices, rotations):
-    centroid = find_centroid(vertices)
-    relative = vertices - centroid
+def get_rotations(shape, rotations):
+    centroid = find_centroid(shape.vertices)
+    relative = shape.vertices - centroid
     radii = np.linalg.norm(relative, axis=1)
     angles = np.arctan2(relative[..., 1], relative[..., 0])
 
@@ -81,6 +91,6 @@ def get_rotations(vertices, rotations):
         rotated_vertices = np.concatenate(rotated_x, rotated_y, axis=1)
         mins, _ = find_bbox(rotated_vertices)
         rotated_vertices -= mins
-        rotations.append(Polygon(rotated_vertices))
+        rotations.append(Polygon(shape, centroid, rotated_vertices))
 
     return rotations
