@@ -23,6 +23,19 @@ def ray_line_intersection_point(p0, r, q0, q1):
 class Shape:
     def __init__(self, vertices):
         self.vertices = vertices
+        self.centroid = find_centroid(shape.vertices)
+        relative = self.vertices - self.centroid
+        self.radii = np.linalg.norm(relative, axis=1)
+        self.angles = np.arctan2(relative[..., 1], relative[..., 0])
+
+    def get_rotation(self, angle):
+        rotated_angles = self.angles + angle
+        rotated_x = self.radii * np.cos(self.angles) + self.centroid
+        rotated_y = self.radii * np.sin(self.angles) + self.centroid
+        rotated_vertices = np.concatenate(rotated_x, rotated_y, axis=1)
+        mins, _ = find_bbox(rotated_vertices)
+        rotated_vertices -= mins
+        return Polygon(self, self.centroid, rotated_vertices)
 
 class Polygon:
     def __init__(self, shape, centroid, vertices):
@@ -75,22 +88,3 @@ def find_centroid(vertices):
 
 def find_bbox(vertices):
     return np.amin(vertices, axis=0), np.amax(vertices, axis=0)
-
-def get_rotations(shape, rotations):
-    centroid = find_centroid(shape.vertices)
-    relative = shape.vertices - centroid
-    radii = np.linalg.norm(relative, axis=1)
-    angles = np.arctan2(relative[..., 1], relative[..., 0])
-
-    d_theta = 2 * np.pi / rotations
-    rotations = []
-    for increment in np.arange(0, 2 * np.pi, d_theta):
-        angles += increment
-        rotated_x = radii * np.cos(angles) + centroid
-        rotated_y = radii * np.sin(angles) + centroid
-        rotated_vertices = np.concatenate(rotated_x, rotated_y, axis=1)
-        mins, _ = find_bbox(rotated_vertices)
-        rotated_vertices -= mins
-        rotations.append(Polygon(shape, centroid, rotated_vertices))
-
-    return rotations
