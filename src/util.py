@@ -64,24 +64,31 @@ class Polygon:
 
         return intersections
 
-    def is_nested(self, other):
+    def resolve_nested(self, other):
         vertex = self.vertices[0]
-        total = 0
-        ray = np.array([1, 0])
+        intersections = 0
+        min_trans = np.inf
+        ray = np.array([0, 1])
         for q0, q1 in zip(other.vertices, other.vertices[1:] + \
             other.vertices[0]):
             point = ray_line_intersection_point(vertex, ray, q0, q1)
             if point is not None:
                 if np.isclose(point, q0).all():
                     if q1[1] < point[1]:
-                        total += 1
+                        translation = min(max_trans, point[1] - vertex[1])
+                        intersections += 1
                 elif np.isclose(point, q1).all():
                     if q0[1] < point[1]:
-                        total += 1
+                        translation = min(max_trans, point[1] - vertex[1])
+                        intersections += 1
                 else:
-                    total += 1
+                    translation = min(max_trans, point[1] - vertex[1])
+                    intersections += 1
 
-        return total % 2 == 1
+        if total % 2 == 0:
+            return 0
+        else:
+            return intersections
 
     def resolve_overlap(self, other, intersections):
         max_trans = 0
@@ -90,7 +97,7 @@ class Polygon:
             p1 = self.vertices[i + 1 % len(self.vertices)]
             q0 = other.vertices[j],
             q1 = other.vertices[j + 1 % len(other.vertices)]
-            
+
             if np.sign(p0[0] - q0[0]) != np.sign(p0[0] - q1[0]):
                 y_coord = (p0[0] - q0[0]) * (q1[1] - q0[1]) / (q1[0] - q0[0])
                 max_trans = max(max_trans, y_coord - p0[1])
@@ -105,6 +112,3 @@ class Polygon:
                 max_trans = max(max_trans, y_coord - q1[1])
 
         return max_trans
-
-    def resolve_nesting(self, other):
-        pass
