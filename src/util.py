@@ -3,7 +3,7 @@ import numpy as np
 def line_line_intersection(p0, p1, q0, q1):
     r = p1 - p0
     s = q1 - q0
-    if np.isclose(np.cross(r, s), 0)[0]:
+    if np.isclose(np.cross(r, s), 0).all():
         return False
     else:
         t = (np.cross((q0 - p0), s) / np.cross(r, s))[0]
@@ -12,7 +12,7 @@ def line_line_intersection(p0, p1, q0, q1):
 
 def ray_line_intersection_point(p0, r, q0, q1):
     s = q1 - q0
-    if np.isclose(np.cross(r, s), 0)[0]:
+    if np.isclose(np.cross(r, s), 0).all():
         return None
     else:
         t = (np.cross((q0 - p0), s) / np.cross(r, s))[0]
@@ -21,7 +21,7 @@ def ray_line_intersection_point(p0, r, q0, q1):
             return np.array([p0 + r * t, q0 + s * u])
 
 def find_centroid(vertices):
-    return vertices.mean(axis=0)
+    return np.mean(vertices, axis=0)
 
 def find_bbox(vertices):
     return np.amin(vertices, axis=0), np.amax(vertices, axis=0)
@@ -29,16 +29,17 @@ def find_bbox(vertices):
 class Shape:
     def __init__(self, vertices):
         self.vertices = vertices
-        self.centroid = find_centroid(shape.vertices)
+        self.centroid = find_centroid(self.vertices)
         relative = self.vertices - self.centroid
         self.radii = np.linalg.norm(relative, axis=1)
         self.angles = np.arctan2(relative[..., 1], relative[..., 0])
 
     def get_rotation(self, angle):
         rotated_angles = self.angles + angle
-        rotated_x = self.radii * np.cos(self.angles) + self.centroid
-        rotated_y = self.radii * np.sin(self.angles) + self.centroid
-        rotated_vertices = np.concatenate(rotated_x, rotated_y, axis=1)
+        rotated_x = self.radii * np.cos(rotated_angles)
+        rotated_y = self.radii * np.sin(rotated_angles)
+        rotated_vertices = np.column_stack((rotated_x, rotated_y)) + \
+            self.centroid
         mins, _ = find_bbox(rotated_vertices)
         rotated_vertices -= mins
         return Polygon(self, self.centroid - mins, rotated_vertices)
@@ -55,10 +56,10 @@ class Polygon:
 
     def detect_intersections(self, other):
         intersections = []
-        for i, (p0, p1) in enumerate(zip(self.vertices, self.vertices[1:] + \
-            [self.vertices[0]])):
+        for i, (p0, p1) in enumerate(zip(self.vertices,
+            np.roll(self.vertices, 1, axis=0))):
             for j, (q0, q1) in enumerate(zip(other.vertices,
-                other.vertices[1:] + [other.vertices[0]])):
+                np.roll(other.vertices, 1, axis=0))):
                 if line_line_intersection(p0, p1, q0, q1):
                     intersections.append(i, j)
 
@@ -69,8 +70,7 @@ class Polygon:
         intersections = 0
         min_trans = np.inf
         ray = np.array([0, 1])
-        for q0, q1 in zip(other.vertices, other.vertices[1:] + \
-            other.vertices[0]):
+        for q0, q1 in zip(other.vertices, np.roll(other.vertices, 1, axis=0)):
             point = ray_line_intersection_point(vertex, ray, q0, q1)
             if point is not None:
                 if np.isclose(point, q0).all():
@@ -105,10 +105,10 @@ class Polygon:
                 y_coord = (p1[0] - q0[0]) * (q1[1] - q0[1]) / (q1[0] - q0[0])
                 max_trans = max(max_trans, y_coord - p1[1])
             if np.sign(q0[0] - p0[0]) != np.sign(q0[0] - p1[0]):
-                y_coord = (q0[0] - p0[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
+                y_coord = (p0[0] - q0[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
                 max_trans = max(max_trans, y_coord - q0[1])
             if np.sign(q1[0] - p0[0]) != np.sign(q1[0] - p1[0]):
-                y_coord = (q1[0] - p0[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
+                y_coord = (p0[0] - q1[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
                 max_trans = max(max_trans, y_coord - q1[1])
 
         return max_trans
