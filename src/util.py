@@ -1,24 +1,78 @@
 import numpy as np
 
+TOL = 1e-5
+
 def line_line_intersection(p0, p1, q0, q1):
     r = p1 - p0
     s = q1 - q0
     if np.isclose(np.cross(r, s), 0).all():
-        return False
+        if not np.isclose(np.cross((q0 - p0), r), 0).all():
+            return None
+        length = np.dot(r, r)
+        t0 = np.dot((q0 - p0), r) / length
+        t1 = t0 + np.dot(s, r) / length
+        if t0 <= t1 and min(1, t1) > max(0, t0) or \
+            t1 <= t0 and min(1, t0) > max(0, t1):
+            return True
+        else:
+            return None
     else:
-        t = (np.cross((q0 - p0), s) / np.cross(r, s))[0]
-        u = (np.cross((q0 - p0), r) / np.cross(r, s))[0]
-        return 0 <= t <= 1 and 0 <= u <= 1
+        t = np.cross((q0 - p0), s) / np.cross(r, s)
+        u = np.cross((q0 - p0), r) / np.cross(r, s)
+        if 0 <= t <= 1 and 0 <= u <= 1:
+            return False
+        else:
+            return None
 
 def ray_line_intersection_point(p0, r, q0, q1):
     s = q1 - q0
     if np.isclose(np.cross(r, s), 0).all():
         return None
     else:
-        t = (np.cross((q0 - p0), s) / np.cross(r, s))[0]
-        u = (np.cross((q0 - p0), r) / np.cross(r, s))[0]
+        t = np.cross((q0 - p0), s) / np.cross(r, s)
+        u = np.cross((q0 - p0), r) / np.cross(r, s)
         if 0 <= t and 0 <= u <= 1:
             return np.array([p0 + r * t, q0 + s * u])
+
+def pir(p0, p1, q0, q1, collinear):
+    if collinear:
+        py0, py1 = sorted((p0[1], p1[1]))
+        qy = max((q0[1], q1[1]))
+        y = min(py1, qy)
+        return y - py0
+    else:
+        p0, p1 = sorted(([*p0], [*p1]))
+        q0, q1 = sorted(([*q0], [*q1]))
+        max_trans = 0
+        if np.isclose(q0[0], q1[0]):
+            if p0[0] < q0[0] + TOL < p1[0] or p0[0] < q0[0] - TOL < p1[0]:
+                y_coord = p0[1] + (q0[0] - p0[0]) * (p1[1] - p0[1]) / \
+                    (p1[0] - p0[0])
+                max_trans = max(max_trans, max(q0[1], q1[1]) - y_coord)
+        elif np.isclose(p0[0], p1[0]):
+            if q0[0] < p0[0] + TOL < q1[0] or q0[0] < p0[0] - TOL < q1[0]:
+                y_coord = q0[1] + (p0[0] - q0[0]) * (q1[1] - q0[1]) / \
+                    (q1[0] - q0[0])
+                max_trans = max(max_trans, y_coord - min(p0[1], p1[1]))
+        else:
+            if q0[0] <= p0[0] + TOL <= q1[0] or q0[0] <= p0[0] - TOL <= q1[0]:
+                y_coord = q0[1] + (p0[0] - q0[0]) * (q1[1] - q0[1]) / \
+                    (q1[0] - q0[0])
+                max_trans = max(max_trans, y_coord - p0[1])
+            if q0[0] <= p1[0] + TOL <= q1[0] or q0[0] <= p1[0] - TOL <= q1[0]:
+                y_coord = q0[1] + (p1[0] - q0[0]) * (q1[1] - q0[1]) / \
+                    (q1[0] - q0[0])
+                max_trans = max(max_trans, y_coord - p1[1])
+            if p0[0] <= q0[0] + TOL <= p1[0] or p0[0] <= q0[0] - TOL <= p1[0]:
+                y_coord = p0[1] + (q0[0] - p0[0]) * (p1[1] - p0[1]) / \
+                    (p1[0] - p0[0])
+                max_trans = max(max_trans, q0[1] - y_coord)
+            if p0[0] <= q1[0] + TOL <= p1[0] or p0[0] <= q1[0] - TOL <= p1[0]:
+                y_coord = p0[1] + (q1[0] - p0[0]) * (p1[1] - p0[1]) / \
+                    (p1[0] - p0[0])
+                max_trans = max(max_trans, q1[1] - y_coord)
+
+        return max_trans
 
 def find_centroid(vertices):
     return np.mean(vertices, axis=0)
@@ -42,6 +96,7 @@ class Shape:
             self.centroid
         mins, _ = find_bbox(rotated_vertices)
         rotated_vertices -= mins
+
         return Polygon(self, self.centroid - mins, rotated_vertices)
 
 class Polygon:
@@ -50,27 +105,32 @@ class Polygon:
         self.centroid = centroid
         self.vertices = vertices
 
-    def translate(self, new_centroid):
+    def translate(self, x, y):
+        self.vertices += [x, y]
+        self.centroid += [x, y]
+
+    def translate_to(self, new_centroid):
         self.vertices += new_centroid - self.centroid
         self.centroid = new_centroid
 
-    def detect_intersections(self, other):
-        intersections = []
+    def resolve_overlap(self, other):
+        trans = 0
         for i, (p0, p1) in enumerate(zip(self.vertices,
-            np.roll(self.vertices, 1, axis=0))):
+            np.roll(self.vertices, -1, axis=0))):
             for j, (q0, q1) in enumerate(zip(other.vertices,
-                np.roll(other.vertices, 1, axis=0))):
-                if line_line_intersection(p0, p1, q0, q1):
-                    intersections.append(i, j)
+                np.roll(other.vertices, -1, axis=0))):
+                collinear = line_line_intersection(p0, p1, q0, q1)
+                if collinear is not None:
+                    trans = max(trans, pir(p0, p1, q0, q1, collinear))
 
-        return intersections
+        return trans + TOL
 
-    def resolve_nested(self, other):
+    def resolve_nesting(self, other):
         vertex = self.vertices[0]
         intersections = 0
         min_trans = np.inf
         ray = np.array([0, 1])
-        for q0, q1 in zip(other.vertices, np.roll(other.vertices, 1, axis=0)):
+        for q0, q1 in zip(other.vertices, np.roll(other.vertices, -1, axis=0)):
             point = ray_line_intersection_point(vertex, ray, q0, q1)
             if point is not None:
                 if np.isclose(point, q0).all():
@@ -89,26 +149,3 @@ class Polygon:
             return 0
         else:
             return translation
-
-    def resolve_overlap(self, other, intersections):
-        max_trans = 0
-        for i, j in intersections:
-            p0 = self.vertices[i],
-            p1 = self.vertices[i + 1 % len(self.vertices)]
-            q0 = other.vertices[j],
-            q1 = other.vertices[j + 1 % len(other.vertices)]
-
-            if np.sign(p0[0] - q0[0]) != np.sign(p0[0] - q1[0]):
-                y_coord = (p0[0] - q0[0]) * (q1[1] - q0[1]) / (q1[0] - q0[0])
-                max_trans = max(max_trans, y_coord - p0[1])
-            if np.sign(p1[0] - q0[0]) != np.sign(p1[0] - q1[0]):
-                y_coord = (p1[0] - q0[0]) * (q1[1] - q0[1]) / (q1[0] - q0[0])
-                max_trans = max(max_trans, y_coord - p1[1])
-            if np.sign(q0[0] - p0[0]) != np.sign(q0[0] - p1[0]):
-                y_coord = (p0[0] - q0[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
-                max_trans = max(max_trans, y_coord - q0[1])
-            if np.sign(q1[0] - p0[0]) != np.sign(q1[0] - p1[0]):
-                y_coord = (p0[0] - q1[0]) * (p1[1] - p0[1]) / (p1[0] - p0[0])
-                max_trans = max(max_trans, y_coord - q1[1])
-
-        return max_trans
