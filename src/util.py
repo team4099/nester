@@ -1,28 +1,33 @@
 import numpy as np
+from enum import Enum
 
 TOL = 1e-5
+
+class Intersection(Enum):
+    Collinear = 0
+    Oblique = 1
+    Skew = 2
 
 def line_line_intersection(p0, p1, q0, q1):
     r = p1 - p0
     s = q1 - q0
     if np.isclose(np.cross(r, s), 0).all():
         if not np.isclose(np.cross((q0 - p0), r), 0).all():
-            return None
+            return Intersection.Skew
+
         length = np.dot(r, r)
         t0 = np.dot((q0 - p0), r) / length
         t1 = t0 + np.dot(s, r) / length
         if t0 <= t1 and min(1, t1) > max(0, t0) or \
             t1 <= t0 and min(1, t0) > max(0, t1):
-            return True
-        else:
-            return None
+            return Intersection.Collinear
     else:
         t = np.cross((q0 - p0), s) / np.cross(r, s)
         u = np.cross((q0 - p0), r) / np.cross(r, s)
         if 0 <= t <= 1 and 0 <= u <= 1:
-            return False
-        else:
-            return None
+            return Intersection.Oblique
+
+    return Intersection.Skew
 
 def ray_line_intersection_point(p0, r, q0, q1):
     s = q1 - q0
@@ -34,8 +39,8 @@ def ray_line_intersection_point(p0, r, q0, q1):
         if 0 <= t and 0 <= u <= 1:
             return np.array([p0 + r * t, q0 + s * u])
 
-def pir(p0, p1, q0, q1, collinear):
-    if collinear:
+def pir(p0, p1, q0, q1, intersection):
+    if intersection is Intersection.Collinear:
         py0, py1 = sorted((p0[1], p1[1]))
         qy = max((q0[1], q1[1]))
         y = min(py1, qy)
@@ -119,9 +124,9 @@ class Polygon:
             np.roll(self.vertices, -1, axis=0))):
             for j, (q0, q1) in enumerate(zip(other.vertices,
                 np.roll(other.vertices, -1, axis=0))):
-                collinear = line_line_intersection(p0, p1, q0, q1)
-                if collinear is not None:
-                    trans = max(trans, pir(p0, p1, q0, q1, collinear))
+                intersection = line_line_intersection(p0, p1, q0, q1)
+                if intersection is not Intersection.Skew:
+                    trans = max(trans, pir(p0, p1, q0, q1, intersection))
 
         return trans + TOL
 
