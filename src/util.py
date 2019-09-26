@@ -120,10 +120,9 @@ class Polygon:
 
     def resolve_overlap(self, other):
         trans = 0
-        for i, (p0, p1) in enumerate(zip(self.vertices,
-            np.roll(self.vertices, -1, axis=0))):
-            for j, (q0, q1) in enumerate(zip(other.vertices,
-                np.roll(other.vertices, -1, axis=0))):
+        for p0, p1 in zip(self.vertices, np.roll(self.vertices, -1, axis=0)):
+            for q0, q1 in zip(other.vertices,
+                np.roll(other.vertices, -1, axis=0)):
                 intersection = line_line_intersection(p0, p1, q0, q1)
                 if intersection is not Intersection.Skew:
                     trans = max(trans, pir(p0, p1, q0, q1, intersection))
