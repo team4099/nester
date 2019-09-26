@@ -31,13 +31,13 @@ def line_line_intersection(p0, p1, q0, q1):
 
 def ray_line_intersection_point(p0, r, q0, q1):
     s = q1 - q0
-    if np.isclose(np.cross(r, s), 0).all():
-        return None
-    else:
+    if not np.isclose(np.cross(r, s), 0).all():
         t = np.cross((q0 - p0), s) / np.cross(r, s)
         u = np.cross((q0 - p0), r) / np.cross(r, s)
         if 0 <= t and 0 <= u <= 1:
-            return np.array([p0 + r * t, q0 + s * u])
+            return p0 + r * t
+
+    return Intersection.Skew
 
 def pir(p0, p1, q0, q1, intersection):
     if intersection is Intersection.Collinear:
@@ -133,24 +133,24 @@ class Polygon:
     def resolve_nesting(self, other):
         vertex = self.vertices[0]
         intersections = 0
-        min_trans = np.inf
+        trans = np.inf
         ray = np.array([0, 1])
         for q0, q1 in zip(other.vertices, np.roll(other.vertices, -1, axis=0)):
             point = ray_line_intersection_point(vertex, ray, q0, q1)
-            if point is not None:
+            if point is not Intersection.Skew:
                 if np.isclose(point, q0).all():
                     if q1[1] < point[1]:
-                        translation = min(max_trans, point[1] - vertex[1])
+                        translation = min(trans, point[1] - vertex[1])
                         intersections += 1
                 elif np.isclose(point, q1).all():
                     if q0[1] < point[1]:
-                        translation = min(max_trans, point[1] - vertex[1])
+                        translation = min(trans, point[1] - vertex[1])
                         intersections += 1
                 else:
-                    translation = min(max_trans, point[1] - vertex[1])
+                    translation = min(trans, point[1] - vertex[1])
                     intersections += 1
 
-        if total % 2 == 0:
+        if intersections % 2 == 0:
             return 0
         else:
-            return translation
+            return translation + TOL
