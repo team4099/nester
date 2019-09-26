@@ -92,17 +92,20 @@ class Shape:
         relative = self.vertices - self.centroid
         self.radii = np.linalg.norm(relative, axis=1)
         self.angles = np.arctan2(relative[..., 1], relative[..., 0])
+        self.rotations = {}
 
     def get_rotation(self, angle):
-        rotated_angles = self.angles + angle
-        rotated_x = self.radii * np.cos(rotated_angles)
-        rotated_y = self.radii * np.sin(rotated_angles)
-        rotated_vertices = np.column_stack((rotated_x, rotated_y)) + \
-            self.centroid
-        mins, _ = find_bbox(rotated_vertices)
-        rotated_vertices -= mins
+        if angle not in self.rotations:
+            rotated_angles = self.angles + angle
+            rotated_x = self.radii * np.cos(rotated_angles)
+            rotated_y = self.radii * np.sin(rotated_angles)
+            rotated_vertices = np.column_stack((rotated_x, rotated_y)) + \
+                self.centroid
+            mins, _ = find_bbox(rotated_vertices)
+            rotated_vertices -= mins
+            self.rotations[angle] = (self.centroid - mins, rotated_vertices)
 
-        return Polygon(self, self.centroid - mins, rotated_vertices)
+        return Polygon(self, *self.rotations[angle])
 
 class Polygon:
     def __init__(self, shape, centroid, vertices):
