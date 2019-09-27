@@ -1,5 +1,7 @@
-import numpy as np
 from enum import Enum
+
+import numpy as np
+from scipy.spatial import ConvexHull
 
 TOL = 1e-5
 
@@ -156,3 +158,63 @@ class Polygon:
             return 0
         else:
             return translation + TOL
+
+class Sheet:
+    def __init__(self, height, increment):
+        self.height = height
+        self.increment = increment
+        self.locked_shapes = []
+
+    def resolve_all(self, polygon):
+        max_trans = 0
+        for other in self.locked_shapes:
+            trans = polygon.resolve_overlap(other)
+            if trans < TOL:
+                trans = polygon.resolve_nesting(other)
+            max_trans = max(max_trans, trans)
+
+    def place_first(self, shape, rotations):
+        min_area = np.inf
+        orientation = None
+        for angle in np.arange(0, 2 * np.pi, 2 * np.pi / rotations):
+            polygon = shape.get_rotation(angle)
+            (x0, y0), (x1, y1) = polygon.bbox
+            area = (x1 - x0) * (y1 - y0)
+            if area < min_area:
+                min_area = area
+                orientation = polygon
+        self.locked_shapes.append(orientation)
+
+    def cost_to_place(self, polygon):
+        vertices = sum((shape.vertices for shape in self.locked_shapes), [])
+        area = ConvexHull(vertices).area
+        return ConvexHull(vertices + polygon.vertices).area - area
+
+    def bottom_left_place(self, shape, rotations):
+        x = 0
+        min_cost = np.inf
+        orientation = None
+        for angle in np.arange(0, 2 * np.pi, 2 * np.pi / rotations):
+            while True:
+                polygon = shape.get_rotation(rotation)
+                translation = self.resolve_all(polygon)
+                while translation > TOL:
+                    polygon.translate(0, translation)
+                y_max = np.amax(polygon.vertices[:, 1])
+                if y_max > height:
+                    x += increment
+                    polygon.translate_to(x, 0)
+                else:
+                    break
+            cost = self.cost_to_place(polygon)
+            if cost < min_cost:
+                min_cost = cost
+                orientation = polygon
+
+        self.locked_shapes.append(orientation)
+
+    def bottom_left_fill(self, shapes, rotations):
+        shape = shapes[0]
+        self.place_first(shape, rotations)
+        for shape in shapes[1:]:
+            self.bottom_left_place(shape, rotations)
