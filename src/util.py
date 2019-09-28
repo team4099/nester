@@ -187,10 +187,11 @@ class Sheet:
         self.locked_shapes.append(orientation)
 
     def cost_to_place(self, polygon):
-        full = np.array([p.vertices for p in self.locked_shapes]
-            ).reshape((-1, 2))
+        full = np.unique(np.array([vertex for p in self.locked_shapes \
+            for vertex in p.vertices]), axis=0)
         area = ConvexHull(full).area
-        return ConvexHull(np.concatenate((full, polygon.vertices))).area - area
+        return ConvexHull(np.unique(np.concatenate((full,
+            polygon.vertices)), axis=0)).area - area
 
     def bottom_left_place(self, shape, rotations):
         x = 0
