@@ -172,13 +172,14 @@ class Sheet:
             if trans < TOL:
                 trans = polygon.resolve_nesting(other)
             max_trans = max(max_trans, trans)
+        return max_trans
 
     def place_first(self, shape, rotations):
         min_area = np.inf
         orientation = None
         for angle in np.arange(0, 2 * np.pi, 2 * np.pi / rotations):
             polygon = shape.get_rotation(angle)
-            (x0, y0), (x1, y1) = polygon.bbox
+            (x0, y0), (x1, y1) = find_bbox(polygon.vertices)
             area = (x1 - x0) * (y1 - y0)
             if area < min_area:
                 min_area = area
@@ -186,9 +187,10 @@ class Sheet:
         self.locked_shapes.append(orientation)
 
     def cost_to_place(self, polygon):
-        vertices = sum((shape.vertices for shape in self.locked_shapes), [])
-        area = ConvexHull(vertices).area
-        return ConvexHull(vertices + polygon.vertices).area - area
+        full = np.array([p.vertices for p in self.locked_shapes]
+            ).reshape((-1, 2))
+        area = ConvexHull(full).area
+        return ConvexHull(np.concatenate((full, polygon.vertices))).area - area
 
     def bottom_left_place(self, shape, rotations):
         x = 0
@@ -196,12 +198,14 @@ class Sheet:
         orientation = None
         for angle in np.arange(0, 2 * np.pi, 2 * np.pi / rotations):
             while True:
-                polygon = shape.get_rotation(rotation)
+                polygon = shape.get_rotation(angle)
                 translation = self.resolve_all(polygon)
                 while translation > TOL:
                     polygon.translate(0, translation)
+                    polygon = shape.get_rotation(angle)
+                    translation = self.resolve_all(polygon)
                 y_max = np.amax(polygon.vertices[:, 1])
-                if y_max > height:
+                if y_max > self.height:
                     x += increment
                     polygon.translate_to(x, 0)
                 else:
