@@ -10,6 +10,15 @@ class Intersection(Enum):
     Oblique = 1
     Skew = 2
 
+def find_centroid(vertices):
+    return np.mean(vertices, axis=0)
+
+def find_bbox(vertices):
+    return [np.amin(vertices, axis=0), np.amax(vertices, axis=0)]
+
+def interval_intersection(a0, a1, b0, b1):
+    return min(a1, b1) > max(a0, b0)
+
 def line_line_intersection(p0, p1, q0, q1):
     r = p1 - p0
     s = q1 - q0
@@ -20,8 +29,8 @@ def line_line_intersection(p0, p1, q0, q1):
         length = np.dot(r, r)
         t0 = np.dot((q0 - p0), r) / length
         t1 = t0 + np.dot(s, r) / length
-        if t0 <= t1 and min(1, t1) > max(0, t0) or \
-            t1 <= t0 and min(1, t0) > max(0, t1):
+        if t0 <= t1 and interval_intersection(t0, t1, 0, 1) or \
+            t1 <= t0 and interval_intersection(t1, t0, 0, 1):
             return Intersection.Collinear
     else:
         t = np.cross((q0 - p0), s) / np.cross(r, s)
@@ -81,12 +90,6 @@ def pir(p0, p1, q0, q1, intersection):
 
         return max_trans
 
-def find_centroid(vertices):
-    return np.mean(vertices, axis=0)
-
-def find_bbox(vertices):
-    return [np.amin(vertices, axis=0), np.amax(vertices, axis=0)]
-
 class Shape:
     def __init__(self, vertices):
         self.vertices = vertices
@@ -123,6 +126,12 @@ class Polygon:
         self.bbox[1] += [x, y]
 
     def resolve_overlap(self, other):
+        min0, max0 = self.bbox
+        min1, max1 = other.bbox
+        if not interval_intersection(min0[0], max0[0], min1[0], max1[0]) or \
+            not interval_intersection(min0[1], max0[1], min1[1], max1[1]):
+            return 0
+
         trans = 0
         for p0, p1 in zip(self.vertices, np.roll(self.vertices, -1, axis=0)):
             for q0, q1 in zip(other.vertices,
