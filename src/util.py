@@ -85,7 +85,7 @@ def find_centroid(vertices):
     return np.mean(vertices, axis=0)
 
 def find_bbox(vertices):
-    return np.amin(vertices, axis=0), np.amax(vertices, axis=0)
+    return [np.amin(vertices, axis=0), np.amax(vertices, axis=0)]
 
 class Shape:
     def __init__(self, vertices):
@@ -114,14 +114,13 @@ class Polygon:
         self.shape = shape
         self.centroid = centroid
         self.vertices = vertices
+        self.bbox = find_bbox(self.vertices)
 
     def translate(self, x, y):
         self.vertices += [x, y]
         self.centroid += [x, y]
-
-    def translate_to(self, new_centroid):
-        self.vertices += new_centroid - self.centroid
-        self.centroid = new_centroid
+        self.bbox[0] += [x, y]
+        self.bbox[1] += [x, y]
 
     def resolve_overlap(self, other):
         trans = 0
@@ -169,7 +168,7 @@ class Sheet:
         max_trans = 0
         for other in self.locked_shapes:
             trans = polygon.resolve_overlap(other)
-            if trans < TOL:
+            if trans <= TOL:
                 trans = polygon.resolve_nesting(other)
             max_trans = max(max_trans, trans)
         return max_trans
@@ -205,10 +204,11 @@ class Sheet:
                     polygon.translate(0, translation)
                     polygon = shape.get_rotation(angle)
                     translation = self.resolve_all(polygon)
-                y_max = np.amax(polygon.vertices[:, 1])
+                y_max = polygon.bbox[1][1]
                 if y_max > self.height:
-                    x += increment
-                    polygon.translate_to(x, 0)
+                    x += self.increment
+                    mins = polygon.bbox[0]
+                    polygon.translate(self.increment, -mins[1])
                 else:
                     break
             cost = self.cost_to_place(polygon)
