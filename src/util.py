@@ -1,4 +1,5 @@
 from enum import Enum
+from copy import deepcopy
 
 import numpy as np
 from scipy.spatial import ConvexHull
@@ -110,7 +111,7 @@ class Shape:
             rotated_vertices -= mins
             self.rotations[angle] = (self.centroid - mins, rotated_vertices)
 
-        return Polygon(self, *self.rotations[angle])
+        return Polygon(self, *deepcopy(self.rotations[angle]))
 
 class Polygon:
     def __init__(self, shape, centroid, vertices):
@@ -118,12 +119,14 @@ class Polygon:
         self.centroid = centroid
         self.vertices = vertices
         self.bbox = find_bbox(self.vertices)
+        self.translation = np.array([0, 0], dtype=float)
 
     def translate(self, x, y):
         self.vertices += [x, y]
         self.centroid += [x, y]
         self.bbox[0] += [x, y]
         self.bbox[1] += [x, y]
+        self.translation += [x, y]
 
     def resolve_overlap(self, other):
         min0, max0 = self.bbox
@@ -172,15 +175,16 @@ class Sheet:
         self.height = height
         self.increment = increment
         self.locked_shapes = []
+        self.x = 0
 
     def resolve_all(self, polygon):
-        max_trans = 0
         for other in self.locked_shapes:
             trans = polygon.resolve_overlap(other)
             if trans <= TOL:
                 trans = polygon.resolve_nesting(other)
-            max_trans = max(max_trans, trans)
-        return max_trans
+            if trans > TOL:
+                return trans
+        return 0
 
     def place_first(self, shape, rotations):
         min_area = np.inf
@@ -202,29 +206,36 @@ class Sheet:
             polygon.vertices)), axis=0)).area - area
 
     def bottom_left_place(self, shape, rotations):
-        x = 0
         min_cost = np.inf
         orientation = None
         for angle in np.arange(0, 2 * np.pi, 2 * np.pi / rotations):
+            inc = 0
+            polygon = shape.get_rotation(angle)
+            for other in reversed(self.locked_shapes):
+                if other.shape is polygon.shape:
+                    polygon.translate(*other.translation)
+                    break
+            else:
+                polygon.translate(self.x, 0)
             while True:
-                polygon = shape.get_rotation(angle)
                 translation = self.resolve_all(polygon)
                 while translation > TOL:
                     polygon.translate(0, translation)
-                    polygon = shape.get_rotation(angle)
                     translation = self.resolve_all(polygon)
-                y_max = polygon.bbox[1][1]
-                if y_max > self.height:
-                    x += self.increment
-                    mins = polygon.bbox[0]
-                    polygon.translate(self.increment, -mins[1])
+                    y_max = polygon.bbox[1][1]
+                    if y_max > self.height:
+                        mins = polygon.bbox[0]
+                        polygon.translate(self.increment, -mins[1])
+                        break
                 else:
                     break
+
             cost = self.cost_to_place(polygon)
             if cost < min_cost:
                 min_cost = cost
                 orientation = polygon
 
+        self.x = orientation.translation[0]
         self.locked_shapes.append(orientation)
 
     def bottom_left_fill(self, shapes, rotations):
