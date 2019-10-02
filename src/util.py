@@ -21,21 +21,30 @@ def interval_intersection(a0, a1, b0, b1):
     return min(a1, b1) > max(a0, b0)
 
 def line_line_intersection(p0, p1, q0, q1):
+    if not interval_intersection(min(p0[0], p1[0]) - TOL,
+        max(p0[0], p1[0]) + TOL, min(q0[0], q1[0]) - TOL,
+        max(q0[0], q1[0]) + TOL) or \
+        not interval_intersection(min(p0[1], p1[1]) - TOL,
+            max(p0[1], p1[1]) + TOL,
+            min(q0[1], q1[1]) - TOL,
+            max(q0[1], q1[1]) + TOL):
+        return Intersection.Skew
+
     r = p1 - p0
     s = q1 - q0
-    if np.isclose(np.cross(r, s), 0).all():
+    c = np.cross(r, s)
+    if np.isclose(c, 0).all():
         if not np.isclose(np.cross((q0 - p0), r), 0).all():
             return Intersection.Skew
 
         length = np.dot(r, r)
         t0 = np.dot((q0 - p0), r) / length
         t1 = t0 + np.dot(s, r) / length
-        if t0 <= t1 and interval_intersection(t0, t1, 0, 1) or \
-            t1 <= t0 and interval_intersection(t1, t0, 0, 1):
+        if min(max(t0, t1), 1) > max(min(t0, t1), 0):
             return Intersection.Collinear
     else:
-        t = np.cross((q0 - p0), s) / np.cross(r, s)
-        u = np.cross((q0 - p0), r) / np.cross(r, s)
+        t = np.cross((q0 - p0), s) / c
+        u = np.cross((q0 - p0), r) / c
         if 0 <= t <= 1 and 0 <= u <= 1:
             return Intersection.Oblique
 
@@ -43,15 +52,17 @@ def line_line_intersection(p0, p1, q0, q1):
 
 def ray_line_intersection_point(p0, r, q0, q1):
     s = q1 - q0
-    if not np.isclose(np.cross(r, s), 0).all():
-        t = np.cross((q0 - p0), s) / np.cross(r, s)
-        u = np.cross((q0 - p0), r) / np.cross(r, s)
+    c = np.cross(r, s)
+    if not np.isclose(c, 0).all():
+        t = np.cross((q0 - p0), s) / c
+        u = np.cross((q0 - p0), r) / c
         if 0 <= t and 0 <= u <= 1:
             return p0 + r * t
 
     return Intersection.Skew
 
 def pir(p0, p1, q0, q1, intersection):
+    t = time()
     if intersection is Intersection.Collinear:
         py0, py1 = sorted((p0[1], p1[1]))
         qy = max((q0[1], q1[1]))
@@ -142,6 +153,8 @@ class Polygon:
                 intersection = line_line_intersection(p0, p1, q0, q1)
                 if intersection is not Intersection.Skew:
                     trans = max(trans, pir(p0, p1, q0, q1, intersection))
+                    if trans > 0:
+                        return trans + TOL
 
         return trans + TOL
 
