@@ -4,7 +4,7 @@ from copy import deepcopy
 import numpy as np
 from scipy.spatial import ConvexHull
 
-TOL = 1e-5
+TOL = 1
 
 class Intersection(Enum):
     Collinear = 0
@@ -18,15 +18,14 @@ def find_bbox(vertices):
     return [np.amin(vertices, axis=0), np.amax(vertices, axis=0)]
 
 def interval_intersection(a0, a1, b0, b1):
-    return min(a1, b1) > max(a0, b0)
+    return min(a1, b1) + TOL >= max(a0, b0)
 
 def line_line_intersection(p0, p1, q0, q1):
     if not interval_intersection(min(p0[0], p1[0]) - TOL,
         max(p0[0], p1[0]) + TOL, min(q0[0], q1[0]) - TOL,
         max(q0[0], q1[0]) + TOL) or \
         not interval_intersection(min(p0[1], p1[1]) - TOL,
-            max(p0[1], p1[1]) + TOL,
-            min(q0[1], q1[1]) - TOL,
+            max(p0[1], p1[1]) + TOL, min(q0[1], q1[1]) - TOL,
             max(q0[1], q1[1]) + TOL):
         return Intersection.Skew
 
@@ -34,17 +33,16 @@ def line_line_intersection(p0, p1, q0, q1):
     s = q1 - q0
     c = np.cross(r, s)
     if np.isclose(c, 0).all():
-        if not np.isclose(np.cross((q0 - p0), r), 0).all():
+        if not np.isclose(np.cross(q0 - p0, r), 0).all():
             return Intersection.Skew
 
-        length = np.dot(r, r)
-        t0 = np.dot((q0 - p0), r) / length
-        t1 = t0 + np.dot(s, r) / length
-        if min(max(t0, t1), 1) > max(min(t0, t1), 0):
+        t0 = np.dot(q0 - p0, r)
+        t1 = t0 + np.dot(s, r)
+        if min(max(t0, t1), np.dot(r, r)) + TOL > max(min(t0, t1), 0):
             return Intersection.Collinear
     else:
-        t = np.cross((q0 - p0), s) / c
-        u = np.cross((q0 - p0), r) / c
+        t = np.cross(q0 - p0, s) / c
+        u = np.cross(q0 - p0, r) / c
         if 0 <= t <= 1 and 0 <= u <= 1:
             return Intersection.Oblique
 
@@ -62,7 +60,6 @@ def ray_line_intersection_point(p0, r, q0, q1):
     return Intersection.Skew
 
 def pir(p0, p1, q0, q1, intersection):
-    t = time()
     if intersection is Intersection.Collinear:
         py0, py1 = sorted((p0[1], p1[1]))
         qy = max((q0[1], q1[1]))
@@ -140,12 +137,6 @@ class Polygon:
         self.translation += [x, y]
 
     def resolve_overlap(self, other):
-        min0, max0 = self.bbox
-        min1, max1 = other.bbox
-        if not interval_intersection(min0[0], max0[0], min1[0], max1[0]) or \
-            not interval_intersection(min0[1], max0[1], min1[1], max1[1]):
-            return 0
-
         trans = 0
         for p0, p1 in zip(self.vertices, np.roll(self.vertices, -1, axis=0)):
             for q0, q1 in zip(other.vertices,
@@ -159,29 +150,35 @@ class Polygon:
         return trans + TOL
 
     def resolve_nesting(self, other):
-        vertex = self.vertices[0]
-        intersections = 0
-        trans = np.inf
-        ray = np.array([0, 1])
-        for q0, q1 in zip(other.vertices, np.roll(other.vertices, -1, axis=0)):
-            point = ray_line_intersection_point(vertex, ray, q0, q1)
-            if point is not Intersection.Skew:
-                if np.isclose(point, q0).all():
-                    if q1[1] < point[1]:
+        max_trans = 0
+        for vertex in self.vertices:
+            intersections = 0
+            trans = np.inf
+            ray = np.array([0, 1])
+            for q0, q1 in zip(other.vertices, np.roll(other.vertices, -1,
+                axis=0)):
+                point = ray_line_intersection_point(vertex, ray, q0, q1)
+                if point is not Intersection.Skew:
+                    if np.isclose(vertex, point).all():
+                        max_trans = max(max_trans, trans)
+                        break
+                    if np.isclose(point, q0).all():
+                        if q1[1] <= point[1] + TOL:
+                            translation = min(trans, point[1] - vertex[1])
+                            intersections += 1
+                    elif np.isclose(point, q1).all():
+                        if q0[1] <= point[1] + TOL:
+                            translation = min(trans, point[1] - vertex[1])
+                            intersections += 1
+                    else:
                         translation = min(trans, point[1] - vertex[1])
                         intersections += 1
-                elif np.isclose(point, q1).all():
-                    if q0[1] < point[1]:
-                        translation = min(trans, point[1] - vertex[1])
-                        intersections += 1
+            else:
+                if intersections % 2 == 0:
+                    return 0
                 else:
-                    translation = min(trans, point[1] - vertex[1])
-                    intersections += 1
-
-        if intersections % 2 == 0:
-            return 0
-        else:
-            return translation + TOL
+                    return translation + TOL
+        return max_trans + TOL
 
 class Sheet:
     def __init__(self, height, increment):
@@ -192,6 +189,11 @@ class Sheet:
 
     def resolve_all(self, polygon):
         for other in self.locked_shapes:
+            min0, max0 = polygon.bbox
+            min1, max1 = other.bbox
+            if not interval_intersection(min0[0], max0[0], min1[0], max1[0]) or \
+                not interval_intersection(min0[1], max0[1], min1[1], max1[1]):
+                continue
             trans = polygon.resolve_overlap(other)
             if trans <= TOL:
                 trans = polygon.resolve_nesting(other)
